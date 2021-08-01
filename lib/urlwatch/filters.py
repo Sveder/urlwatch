@@ -39,6 +39,7 @@ import yaml
 import sys
 import subprocess
 import io
+import csv
 
 from enum import Enum
 from lxml import etree
@@ -328,6 +329,46 @@ class Html2TextFilter(FilterBase):
 
         return html2text(data, baseurl=getattr(self.job, 'url', getattr(self.job, 'navigate', '')),
                          method=method, options=options)
+
+
+class Csv2TextFilter(FilterBase):
+    """Convert Csv to plaintext"""
+
+    __kind__ = 'csv2text'
+
+    __supported_subfilters__ = {
+        'format_message': 'A format string with the headers that will be outputted for each csv '
+                          'line (header will be lower-cased)',
+        'ignore_header': 'If your format string is number based, but the CSV has headers, '
+                         'this flag will force ignoring the header.',
+    }
+
+    __default_subfilter__ = 'format_message'
+
+    def filter(self, data, subfilter):
+        has_header = csv.Sniffer().has_header(data)
+
+        reader = csv.reader(data.split('\n'))
+        data_list = list(reader)
+        header = None
+
+        if has_header:
+            header = data_list[0]
+            data_list = data_list[1:]
+
+        header = [i.lower() for i in header]
+        message = subfilter['format_message']
+        ignore_header = subfilter['ignore_header']
+
+        lines = []
+        for i in data_list:
+            if header and not ignore_header:
+                legend = dict(zip(header, i))
+                lines.append(message.format(**legend))
+            else:
+                lines.append(message.format(*i))
+
+        return '\n'.join(lines)
 
 
 class Pdf2TextFilter(FilterBase):
